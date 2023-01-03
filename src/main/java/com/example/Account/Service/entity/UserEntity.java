@@ -38,7 +38,6 @@ public class UserEntity implements UserDetails {
 
     @NotBlank(message = "Email is required")
     @Email(regexp = "^[a-zA-Z0-9_.+-]+@acme\\.com$", message = "Domain should be @acme.com")
-    @UniqueElements(message = "Account with this email already exists!")
     private String email;
 
     @ValidPassword
@@ -50,6 +49,11 @@ public class UserEntity implements UserDetails {
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     @ElementCollection(fetch = FetchType.EAGER)
     private List<Role> roles;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    @ToString.Exclude
+    private List<PaymentEntity> payments;
 
     @Override
     @JsonIgnore

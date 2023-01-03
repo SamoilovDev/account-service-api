@@ -16,36 +16,49 @@ import java.util.*;
 public class PaymentService {
 
     @Autowired
-    private PaymentRepo employeeRepo;
+    private PaymentRepo paymentRepo;
 
     @Autowired
     private UserRepo userRepo;
 
-    public Map<String, String> addEmployees(List<PaymentEntity> employeeEntities) {
-        employeeRepo.saveAll(employeeEntities);
+    public Map<String, String> addPayments(List<PaymentEntity> paymentEntities) {
+
+        paymentEntities.forEach( payment -> {
+            Optional<UserEntity> user = userRepo.findUserEntityByEmailIgnoreCase(payment.getUserEmail());
+            user.ifPresent(userEntity -> {
+                userEntity.getPayments().add(payment);
+                userRepo.save(userEntity);
+            });
+            if (user.isEmpty()) paymentRepo.save(payment);
+        });
+
+        paymentRepo.saveAll(paymentEntities);
         return Map.of("status", "Added successfully!");
     }
 
-    public Map<String, String> updateEmployee(PaymentEntity employee) {
-        if (employeeRepo.findEmployeeEntityByUserEmail(employee.getUserEmail()).isEmpty()) {
+    public Map<String, String> updatePayment(PaymentEntity payment) {
+        if (paymentRepo.findByUserEmailIgnoreCase(payment.getUserEmail()).isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee doesn't exist!");
         } else {
-            employeeRepo.save(employee);
+            UserEntity user = userRepo.findUserEntityByEmailIgnoreCase(payment.getUserEmail()).get();
+            user.getPayments().add(payment);
+            userRepo.save(user);
             return Map.of("status", "Updated successfully!");
         }
     }
 
     public List<PaymentInfoModel> findInfoByMail(String email, Date period) {
-        List<PaymentEntity> foundedEmployees = Objects.equals(period, null)
-                ? employeeRepo.findAllByUserEmail(email)
-                : List.of(employeeRepo.findByUserEmailAndPeriod(email, period).get());
+        List<PaymentEntity> foundedPayments = Objects.equals(period, null)
+                ? paymentRepo.findAllByUserEmail(email)
+                : List.of(paymentRepo.findByUserEmailAndPeriod(email, period).get());
 
-        if (userRepo.findUserEntityByEmailIgnoreCase(email).isEmpty()) {
+        if (userRepo.findUserEntityByEmailIgnoreCase(email).isEmpty())
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
+
+
         UserEntity user = userRepo.findUserEntityByEmailIgnoreCase(email).get();
 
-        return foundedEmployees.stream()
+        return foundedPayments.stream()
                 .map(employee -> new PaymentInfoModel(user.getName(),
                     user.getLastName(),
                     employee.getPeriod(),

@@ -39,4 +39,10 @@ public class PaymentEntity {
     @Min(value = 0, message = "Salary can not be less than zero!")
     private Double salary;
 
+
+    @JsonIgnore
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private UserEntity user;
+
 }

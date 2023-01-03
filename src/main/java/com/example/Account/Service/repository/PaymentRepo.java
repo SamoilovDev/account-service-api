@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface PaymentRepo extends CrudRepository<PaymentEntity, Long> {
-    Optional<PaymentEntity> findEmployeeEntityByUserEmail(String userEmail);
+    Optional<PaymentEntity> findByUserEmailIgnoreCase(String userEmail);
 
     Optional<PaymentEntity> findByUserEmailAndPeriod(String email, Date period);
 

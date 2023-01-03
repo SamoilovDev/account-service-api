@@ -33,13 +33,13 @@ public class BusinessController {
     }
 
     @PostMapping("/acct/payments")
-    public ResponseEntity<?> downloadPayments(@RequestBody List<@Valid PaymentEntity> employeeEntities) {
-        return ResponseEntity.ok(employeeService.addEmployees(employeeEntities));
+    public ResponseEntity<?> downloadPayments(@RequestBody List<@Valid PaymentEntity> paymentEntities) {
+        return ResponseEntity.ok(employeeService.addPayments(paymentEntities));
     }
 
     @PutMapping ("/acct/payments")
-    public ResponseEntity<?> updatePayments(@Valid @RequestBody PaymentEntity employee) {
-        return ResponseEntity.ok(employeeService.updateEmployee(employee));
+    public ResponseEntity<?> updatePayments(@Valid @RequestBody PaymentEntity payment) {
+        return ResponseEntity.ok(employeeService.updatePayment(payment));
     }
 
 }
