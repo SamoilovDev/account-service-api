@@ -6,6 +6,7 @@ import com.example.Account.Service.model.Role;
 import com.example.Account.Service.model.RoleChangeRequest;
 import com.example.Account.Service.repository.UserRepo;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class UserService implements UserDetailsService {
 
     @Autowired
@@ -33,6 +35,7 @@ public class UserService implements UserDetailsService {
         if (userRepo.findUserEntityByEmailIgnoreCase(user.getEmail()).isEmpty()) {
             user.setPassword(configuration.getEncoder().encode(user.getPassword()));
 
+            log.info("Check is user the first and set role");
             user.getRoles().add(
                     userRepo.findById(1L).isEmpty()
                     ? Role.ADMINISTRATOR
@@ -40,9 +43,10 @@ public class UserService implements UserDetailsService {
             );
 
             userRepo.save(user);
-
+            log.info("Save new user's entity to repo and send answer");
             return ResponseEntity.ok(user);
         } else {
+            log.info("Create user exist exception");
             throw new UserExistException();
         }
     }
@@ -51,16 +55,17 @@ public class UserService implements UserDetailsService {
         UserEntity user = (UserEntity) loadUserByUsername(request.getUser());
         checkRoleChangeRequest(user, request);
 
+        log.info("Check and do command");
         boolean grant = request.getOperation().equalsIgnoreCase("GRANT")
                 ? user.getRoles().add(Role.valueOf(request.getRole()))
                 : user.getRoles().remove(Role.valueOf(request.getRole()));
-
+        log.info("Save changes and send answer");
         userRepo.save(user);
         return ResponseEntity.ok(user);
     }
 
     private void checkRoleChangeRequest(UserEntity user, RoleChangeRequest request) {
-
+        log.info("Check role change request");
          if (user.getRoles().size() < 2) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user must have at least one role!");
         } else if (request.getRole().equalsIgnoreCase("ADMINISTRATOR")) {
@@ -82,7 +87,8 @@ public class UserService implements UserDetailsService {
     public ResponseEntity<?> getAllUsers() {
         List<UserEntity> users = new ArrayList<>();
         userRepo.findAll().forEach(users::add);
-        return ResponseEntity.ok(users);
+        log.info("Add all users from repository to list and send answer");
+        return ResponseEntity.ok(users.isEmpty() ? "[]" : users);
     }
 
     public ResponseEntity<?> deleteUser(String email) {
@@ -109,7 +115,6 @@ public class UserService implements UserDetailsService {
         userRepo.save(user);
         return ResponseEntity.ok(Map.of("email", user.getEmail(),
                 "status", "The password has been updated successfully"));
-
     }
 
     @Override

@@ -32,11 +32,13 @@ public class ValidatorHandler extends ResponseEntityExceptionHandler {
                 ApiError.builder()
                 .status(status.value())
                 .error("Bad Request")
-                .message(errors.size() == 1
+                .message(
+                        errors.size() == 1
                         ? errors.getOrDefault("password", "")
                         : errors.entrySet().stream()
                         .map(e -> e.getKey().concat(": ").concat(e.getValue()))
-                        .collect(Collectors.joining("\n")))
+                        .collect(Collectors.joining("\n"))
+                )
                 .path(request.getDescription(false).replace("uri=", ""))
                 .build(), HttpStatus.BAD_REQUEST);
     }
@@ -48,7 +50,7 @@ public class ValidatorHandler extends ResponseEntityExceptionHandler {
                 ApiError.builder()
                         .status(HttpStatus.BAD_REQUEST.value())
                         .error("Bad request")
-                        .path(request.getDescription(false).replace("uri", ""))
+                        .path(request.getDescription(false).replace("uri=", ""))
                         .build()
         );
     }

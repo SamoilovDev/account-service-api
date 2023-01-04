@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.time.LocalDateTime;
 
 @ControllerAdvice
 public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
