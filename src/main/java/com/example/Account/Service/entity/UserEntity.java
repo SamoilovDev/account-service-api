@@ -19,7 +19,7 @@ import java.util.List;
 @Entity
 @Table(name = "user")
 @Getter @Setter
-@ToString(exclude = "password")
+@ToString
 @NoArgsConstructor
 public class UserEntity implements UserDetails {
 
@@ -43,6 +43,7 @@ public class UserEntity implements UserDetails {
     @ValidPassword
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(name = "password", nullable = false)
+    @ToString.Exclude
     private String password;
 
     @Enumerated(EnumType.STRING)
