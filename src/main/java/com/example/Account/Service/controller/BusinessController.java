@@ -1,6 +1,7 @@
 package com.example.Account.Service.controller;
 
 import com.example.Account.Service.entity.PaymentEntity;
+import com.example.Account.Service.model.PaymentInfoModel;
 import com.example.Account.Service.service.PaymentService;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.OptBoolean;
@@ -14,32 +15,35 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
 public class BusinessController {
 
     @Autowired
-    PaymentService employeeService;
+    private PaymentService employeeService;
 
     @GetMapping("/empl/payment")
     @Transactional
-    public ResponseEntity<?> getPayment(@RequestParam(required = false)
-                                        @DateTimeFormat(pattern = "MM-yyyy", iso = DateTimeFormat.ISO.DATE)
-                                        @JsonFormat(pattern = "MM-yyyy", lenient = OptBoolean.FALSE)
-                                        Date period,
-                                        Principal user) {
-        return ResponseEntity.ok(employeeService.findInfoByMail(user.getName(), period));
+    public ResponseEntity<List<PaymentInfoModel>> getPayment(
+            @RequestParam(required = false)
+            @DateTimeFormat(pattern = "MM-yyyy", iso = DateTimeFormat.ISO.DATE)
+            @JsonFormat(pattern = "MM-yyyy", lenient = OptBoolean.FALSE)
+            Date period,
+            Principal user
+    ) {
+        return employeeService.findInfoByMail(user.getName(), period);
     }
 
     @PostMapping("/acct/payments")
-    public ResponseEntity<?> downloadPayments(@RequestBody List<@Valid PaymentEntity> paymentEntities) {
-        return ResponseEntity.ok(employeeService.addPayments(paymentEntities));
+    public ResponseEntity<Map<String, String>> downloadPayments(@RequestBody List<@Valid PaymentEntity> paymentEntities) {
+        return employeeService.addPayments(paymentEntities);
     }
 
     @PutMapping ("/acct/payments")
-    public ResponseEntity<?> updatePayments(@Valid @RequestBody PaymentEntity payment) {
-        return ResponseEntity.ok(employeeService.updatePayment(payment));
+    public ResponseEntity<Map<String, String>> updatePayments(@Valid @RequestBody PaymentEntity payment) {
+        return employeeService.updatePayment(payment);
     }
 
 }

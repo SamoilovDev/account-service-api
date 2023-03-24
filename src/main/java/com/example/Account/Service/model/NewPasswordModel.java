@@ -10,4 +10,5 @@ public class NewPasswordModel {
     @ValidPassword
     @JsonAlias("new_password")
     private String password;
+
 }

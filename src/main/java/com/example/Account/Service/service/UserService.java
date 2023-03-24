@@ -31,7 +31,7 @@ public class UserService implements UserDetailsService {
     @Autowired
     private ApplicationConfiguration configuration;
 
-    public ResponseEntity<?> addUser(UserEntity user) {
+    public ResponseEntity<UserEntity> addUser(UserEntity user) {
         if (userRepo.findUserEntityByEmailIgnoreCase(user.getEmail()).isEmpty()) {
             user.setPassword(configuration.getEncoder().encode(user.getPassword()));
 
@@ -51,60 +51,41 @@ public class UserService implements UserDetailsService {
         }
     }
 
-    public ResponseEntity<?> changeUserRole(RoleChangeRequest request) {
-        UserEntity user = (UserEntity) loadUserByUsername(request.getUser());
-        checkRoleChangeRequest(user, request);
+    public ResponseEntity<UserEntity> changeUserRole(RoleChangeRequest request) {
+        UserEntity user = checkRoleChangeRequest((UserEntity) loadUserByUsername(request.getUser()), request);
 
         log.info("Check and do command");
-        boolean grant = request.getOperation().equalsIgnoreCase("GRANT")
-                ? user.getRoles().add(Role.valueOf(request.getRole()))
-                : user.getRoles().remove(Role.valueOf(request.getRole()));
-        log.info("Save changes and send answer");
-        userRepo.save(user);
+        if (
+                request.getOperation().equalsIgnoreCase("GRANT")
+                        ? user.getRoles().add(Role.valueOf(request.getRole()))
+                        : user.getRoles().remove(Role.valueOf(request.getRole()))
+        ) {
+            log.info("Save changes and send answer");
+            userRepo.save(user);
+        }
+
         return ResponseEntity.ok(user);
     }
 
-    private void checkRoleChangeRequest(UserEntity user, RoleChangeRequest request) {
-        log.info("Check role change request");
-         if (user.getRoles().size() < 2) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user must have at least one role!");
-        } else if (request.getRole().equalsIgnoreCase("ADMINISTRATOR")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Can't remove ADMINISTRATOR role!");
-        } else if (user.getRoles().stream().anyMatch(role ->
-                        ! role.getRoleType().equals(Role.valueOf(request.getRole()).getRoleType()))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user cannot combine administrative and business roles!");
-        }
-
-         if (request.getOperation().equalsIgnoreCase("GRANT") &&
-                 user.getRoles().contains(Role.valueOf(request.getRole()))) {
-             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already had this role!");
-         } else if (request.getOperation().equalsIgnoreCase("REMOVE")
-                 && user.getRoles().stream().noneMatch(role -> role.toString().equals(request.getRole()))) {
-             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user does not have a role!");
-         }
-    }
-
-    public ResponseEntity<?> getAllUsers() {
-        List<UserEntity> users = new ArrayList<>();
-        userRepo.findAll().forEach(users::add);
+    public ResponseEntity<List<UserEntity>> getAllUsers() {
+        List<UserEntity> users = (List<UserEntity>) userRepo.findAll();
         log.info("Add all users from repository to list and send answer");
-        return ResponseEntity.ok(users.isEmpty() ? "[]" : users);
+        return ResponseEntity.ok(users.isEmpty() ? new ArrayList<>() : users);
     }
 
-    public ResponseEntity<?> deleteUser(String email) {
-        if (userRepo.findUserEntityByEmailIgnoreCase(email).isPresent()) {
-            UserEntity user = userRepo.findUserEntityByEmailIgnoreCase(email).get();
+    public ResponseEntity<Map<String, String>> deleteUser(String email) {
+        UserEntity user = userRepo.findUserEntityByEmailIgnoreCase(email)
+                .orElseThrow(UserNotFoundException::new);
 
-            if (user.getRoles().stream().anyMatch(role -> role.equals(Role.ADMINISTRATOR))) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Can't remove ADMINISTRATOR role!");
-            }
-
+        if (user.getRoles().contains(Role.ADMINISTRATOR)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Can't remove ADMINISTRATOR role!");
+        } else {
             userRepo.delete(user);
             return ResponseEntity.ok(Map.of("user", email, "status", "Deleted successfully!"));
-        } else throw new UserNotFoundException();
+        }
     }
 
-    public ResponseEntity<?> changePassword(String newPassword, String email) {
+    public ResponseEntity<Map<String, String>> changePassword(String newPassword, String email) {
         UserEntity user = (UserEntity) loadUserByUsername(email);
 
         if (configuration.getEncoder().matches(newPassword, user.getPassword())) {
@@ -113,20 +94,47 @@ public class UserService implements UserDetailsService {
 
         user.setPassword(configuration.getEncoder().encode(newPassword));
         userRepo.save(user);
-        return ResponseEntity.ok(Map.of("email", user.getEmail(),
-                "status", "The password has been updated successfully"));
+        return ResponseEntity.ok(
+                Map.of(
+                        "email", user.getEmail(),
+                        "status", "The password has been updated successfully"
+                )
+        );
     }
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         return username.matches("^[a-zA-Z0-9_.+-]+@acme\\.com$")
-                ? userRepo
-                .findUserEntityByEmailIgnoreCase(username)
-                .orElseThrow(UserNotFoundException::new)
-                : userRepo
-                .findUserEntityByNameAndLastName(username.split("\\s")[0],
-                        username.split("\\s").length > 1 ? username.split("\\s")[1] : "")
+                ? userRepo.findUserEntityByEmailIgnoreCase(username)
+                    .orElseThrow(UserNotFoundException::new)
+                : userRepo.findUserEntityByNameAndLastName(
+                        username.split("\\s")[0],
+                        username.split("\\s").length > 1 ? username.split("\\s")[1] : ""
+                )
                 .orElseThrow(UserNotFoundException::new);
+    }
+
+    private UserEntity checkRoleChangeRequest(UserEntity user, RoleChangeRequest request) {
+        log.info("Check role change request");
+        if (user.getRoles().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user must have at least one role!");
+        } else if (request.getRole().equalsIgnoreCase("ADMINISTRATOR")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Can't remove ADMINISTRATOR role!");
+        } else if (
+                user.getRoles()
+                        .stream()
+                        .anyMatch(role -> ! role.getRoleType().equals(Role.valueOf(request.getRole()).getRoleType()))
+        ) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user cannot combine administrative and business roles!");
+        } else if (request.getOperation().equalsIgnoreCase("GRANT") &&
+                user.getRoles().contains(Role.valueOf(request.getRole()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already had this role!");
+        } else if (
+                request.getOperation().equalsIgnoreCase("REMOVE")
+                        && user.getRoles().stream().noneMatch(role -> role.toString().equals(request.getRole()))
+        ) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user does not have a role!");
+        } else return user;
     }
 
 }
@@ -136,19 +144,11 @@ public class UserService implements UserDetailsService {
 
 @ResponseStatus(code = HttpStatus.NOT_FOUND, reason = "User not found!")
 @NoArgsConstructor
-class UserNotFoundException extends RuntimeException {
-    public UserNotFoundException(String message) {
-        super(message);
-    }
-}
+class UserNotFoundException extends RuntimeException { }
 
 
 
 
-@ResponseStatus(code = HttpStatus.NOT_FOUND, reason = "User exist!")
+@ResponseStatus(code = HttpStatus.BAD_REQUEST, reason = "User exist!")
 @NoArgsConstructor
-class UserExistException extends RuntimeException {
-    public UserExistException(String message) {
-        super(message);
-    }
-}
+class UserExistException extends RuntimeException { }
