@@ -45,8 +45,8 @@ public class SecurityConfiguration {
                     auth.requestMatchers(HttpMethod.POST, "/api/auth/changepass").authenticated();
                     auth.requestMatchers(HttpMethod.GET, "/api/empl/payment")
                             .hasAnyAuthority("ACCOUNTANT", "ADMINISTRATOR");
-                    auth.requestMatchers("api/acct/payments").hasAnyAuthority("ACCOUNTANT");
-                    auth.requestMatchers("api/admin/**").hasAnyAuthority("ADMINISTRATOR");
+                    auth.requestMatchers("/api/acct/payments").hasAnyAuthority("ACCOUNTANT");
+                    auth.requestMatchers("/api/admin/**").hasAnyAuthority("ADMINISTRATOR");
                     auth.anyRequest().authenticated();
                 })
                 .sessionManagement()

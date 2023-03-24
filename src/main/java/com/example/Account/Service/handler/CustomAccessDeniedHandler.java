@@ -3,7 +3,6 @@ package com.example.Account.Service.handler;
 import com.example.Account.Service.model.ApiError;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
@@ -13,14 +12,15 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.time.LocalDateTime;
 
 @ControllerAdvice
 public class CustomAccessDeniedHandler implements AccessDeniedHandler {
     @Override
-    public void handle(HttpServletRequest request,
-                       HttpServletResponse response,
-                       AccessDeniedException accessDeniedException) throws IOException, ServletException {
+    public void handle(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            AccessDeniedException accessDeniedException
+    ) throws IOException {
 
         ApiError apiError = ApiError.builder()
                 .status(HttpStatus.FORBIDDEN.value())
@@ -37,8 +37,6 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
 
             writer.print(jsonMapper.writeValueAsString(apiError));
         }
-
-
 
     }
 }

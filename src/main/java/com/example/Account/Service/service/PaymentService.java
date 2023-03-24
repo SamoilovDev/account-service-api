@@ -8,6 +8,7 @@ import com.example.Account.Service.repository.UserRepo;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -23,59 +24,63 @@ public class PaymentService {
     @Autowired
     private UserRepo userRepo;
 
-    public Map<String, String> addPayments(List<PaymentEntity> paymentEntities) {
+    public ResponseEntity<Map<String, String>> addPayments(List<PaymentEntity> paymentEntities) {
 
         paymentEntities.forEach( payment -> {
-            Optional<UserEntity> user = userRepo.findUserEntityByEmailIgnoreCase(payment.getUserEmail());
-            user.ifPresent(userEntity -> {
+            userRepo.findUserEntityByEmailIgnoreCase(payment.getUserEmail()).ifPresent(userEntity -> {
                 userEntity.getPayments().add(payment);
                 userRepo.save(userEntity);
             });
-            if (user.isEmpty()) paymentRepo.save(payment);
+            paymentRepo.save(payment);
         });
         log.info("Add all payments to users");
 
-        return Map.of("status", "Added successfully!");
+        return ResponseEntity.ok(Map.of("status", "Added successfully!"));
     }
 
-    public Map<String, String> updatePayment(PaymentEntity payment) {
-        if (paymentRepo.findByUserEmailIgnoreCase(payment.getUserEmail()).isEmpty()) {
+    public ResponseEntity<Map<String, String>> updatePayment(PaymentEntity payment) {
+        UserEntity user = userRepo.findUserEntityByEmailIgnoreCase(payment.getUserEmail()).orElseThrow(() -> {
             log.info("Create new Exception to send request");
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee doesn't exist!");
-        } else {
-            UserEntity user = userRepo.findUserEntityByEmailIgnoreCase(payment.getUserEmail()).get();
-            user.getPayments().add(payment);
-            log.info("Find user's entity and add new payment");
-            userRepo.save(user);
-            return Map.of("status", "Updated successfully!");
-        }
+            return new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee doesn't exist!");
+        });
+
+        log.info("Find user's entity and add new payment");
+        user.getPayments().add(payment);
+        userRepo.save(user);
+
+        return ResponseEntity.ok(Map.of("status", "Updated successfully!"));
     }
 
-    public List<PaymentInfoModel> findInfoByMail(String email, Date period) {
+    public ResponseEntity<List<PaymentInfoModel>> findInfoByMail(String email, Date period) {
         List<PaymentEntity> foundedPayments = Objects.equals(period, null)
                 ? paymentRepo.findAllByUserEmail(email)
-                : List.of(paymentRepo.findByUserEmailAndPeriod(email, period).get());
-        log.info("Find all payments");
+                : paymentRepo.findAllByUserEmailAndPeriod(email, period);
+        log.info("Founded all eligible payments");
 
-        if (userRepo.findUserEntityByEmailIgnoreCase(email).isEmpty()) {
+        UserEntity user = userRepo.findUserEntityByEmailIgnoreCase(email).orElseThrow(() -> {
             log.info("Create new exception, because user's entity doesn't exist");
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
+            return new ResponseStatusException(HttpStatus.NOT_FOUND);
+        });
 
-        UserEntity user = userRepo.findUserEntityByEmailIgnoreCase(email).get();
         log.info("Prepare and send all founded payments");
-        return foundedPayments.stream()
-                .map(employee -> new PaymentInfoModel(user.getName(),
-                        user.getLastName(),
-                        employee.getPeriod(),
-                        prepareSalary(employee.getSalary())
-                ))
-                .toList();
+        return ResponseEntity.ok(
+                foundedPayments.stream()
+                        .map(
+                                employee -> new PaymentInfoModel(
+                                        user.getName(),
+                                        user.getLastName(),
+                                        employee.getPeriod(),
+                                        prepareSalary(employee.getSalary())
+                                )
+                        )
+                        .toList()
+        );
     }
 
     private String prepareSalary(Double salary) {
         long dollars = salary.longValue();
-        int cents = (int) ((salary % 1) * 100);
+        long cents = (long) ((salary % 1) * 100);
+
         log.info("Prepare salary...");
         return "%d dollar(s) %d cent(s)".formatted(dollars, cents);
     }
