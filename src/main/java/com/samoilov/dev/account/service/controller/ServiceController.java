@@ -1,6 +1,8 @@
 package com.samoilov.dev.account.service.controller;
 
-import com.samoilov.dev.account.service.entity.UserEntity;
+import com.samoilov.dev.account.service.dto.ResponseUserStatusDto;
+import com.samoilov.dev.account.service.dto.UserProfileDto;
+import com.samoilov.dev.account.service.entity.UserProfileEntity;
 import com.samoilov.dev.account.service.model.RoleChangeRequest;
 import com.samoilov.dev.account.service.service.UserAccountService;
 import jakarta.validation.Valid;
@@ -15,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -25,17 +26,17 @@ public class ServiceController {
     private final UserAccountService userAccountService;
 
     @PutMapping("/user/role")
-    public ResponseEntity<UserEntity> changeRole(@Valid @RequestBody RoleChangeRequest request) {
+    public ResponseEntity<UserProfileDto> changeRole(@Valid @RequestBody RoleChangeRequest request) {
         return userAccountService.changeUserRole(request);
     }
 
     @DeleteMapping("/user/{email}")
-    public ResponseEntity<Map<String, String>> deleteUser(@PathVariable String email) {
+    public ResponseEntity<ResponseUserStatusDto> deleteUser(@PathVariable String email) {
         return userAccountService.deleteUser(email);
     }
 
     @GetMapping("/user")
-    public ResponseEntity<List<UserEntity>> getUsers() {
+    public ResponseEntity<List<UserProfileEntity>> getUsers() {
         return userAccountService.getAllUsers();
     }
 

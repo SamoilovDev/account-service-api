@@ -1,13 +1,15 @@
 package com.samoilov.dev.account.service.service;
 
-import com.samoilov.dev.account.service.entity.UserEntity;
-import com.samoilov.dev.account.service.exception.UserExistException;
+import com.samoilov.dev.account.service.dto.ResponseUserStatusDto;
+import com.samoilov.dev.account.service.dto.UserProfileDto;
+import com.samoilov.dev.account.service.entity.UserProfileEntity;
+import com.samoilov.dev.account.service.exception.UserAlreadyExistsException;
 import com.samoilov.dev.account.service.exception.UserNotFoundException;
+import com.samoilov.dev.account.service.mapper.UserCredentialsMapper;
 import com.samoilov.dev.account.service.model.OperationType;
-import com.samoilov.dev.account.service.model.RoleType;
 import com.samoilov.dev.account.service.model.RoleChangeRequest;
+import com.samoilov.dev.account.service.model.RoleType;
 import com.samoilov.dev.account.service.repository.UserAccountRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -16,10 +18,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
+
+import static org.apache.logging.log4j.util.Strings.EMPTY;
 
 @Slf4j
 @Service
@@ -28,103 +32,137 @@ public class UserAccountService implements UserDetailsService {
 
     private final UserAccountRepository userAccountRepository;
 
+    private final UserCredentialsMapper userCredentialsMapper;
+
     private final PasswordEncoder passwordEncoder;
 
+    public static final String ACME_EMAIL_REGEX = "^[a-zA-Z0-9_.+-]+@acme\\.com$";
+
     @Transactional
-    public ResponseEntity<UserEntity> addUser(UserEntity user) {
-        if (userAccountRepository.findUserEntityByEmailIgnoreCase(user.getEmail()).isEmpty()) {
-            user.setPassword(passwordEncoder.encode(user.getPassword()));
-            user.getRoles().add(
-                    userAccountRepository.findById(1L).isEmpty()
-                            ? RoleType.ADMINISTRATOR
-                            : RoleType.USER
-            );
+    public ResponseEntity<UserProfileDto> addUser(UserProfileDto user) {
+        if (userAccountRepository.isEmailRegistered(user.getEmail())) {
+            throw new UserAlreadyExistsException();
+        }
 
-            userAccountRepository.save(user);
+        RoleType roleOfNewUser = userAccountRepository.isDatabaseEmpty()
+                ? RoleType.ADMINISTRATOR
+                : RoleType.USER;
 
-            return ResponseEntity.ok(user);
+        user.getRoles().add(roleOfNewUser);
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
+        user.setId(
+                userAccountRepository
+                        .save(userCredentialsMapper.mapUserProfileDtoToEntity(user))
+                        .getId()
+        );
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(user);
+    }
+
+    @Transactional
+    public ResponseEntity<UserProfileDto> changeUserRole(RoleChangeRequest request) {
+        UserProfileEntity user = (UserProfileEntity) this.loadUserByUsername(request.getUser());
+
+        this.checkRoleChangeRequest(user, request);
+
+        if (request.getOperation() == OperationType.GRANT) {
+            user.getRoles().add(RoleType.valueOf(request.getRole()));
         } else {
-            throw new UserExistException();
-        }
-    }
-
-    public ResponseEntity<UserEntity> changeUserRole(RoleChangeRequest request) {
-        UserEntity user = this.checkRoleChangeRequest((UserEntity) this.loadUserByUsername(request.getUser()), request);
-        boolean userDataChanged = request.getOperation() == OperationType.GRANT
-                ? user.getRoles().add(RoleType.valueOf(request.getRole()))
-                : user.getRoles().remove(RoleType.valueOf(request.getRole()));
-
-        if (userDataChanged) {
-            userAccountRepository.save(user);
+            user.getRoles().remove(RoleType.valueOf(request.getRole()));
         }
 
-        return ResponseEntity.ok(user);
+        return ResponseEntity.ok(
+                userCredentialsMapper.mapUserProfileEntityToDto(userAccountRepository.save(user))
+        );
     }
 
-    public ResponseEntity<List<UserEntity>> getAllUsers() {
+    public ResponseEntity<List<UserProfileEntity>> getAllUsers() {
         return ResponseEntity.ok(userAccountRepository.findAll());
     }
 
-    public ResponseEntity<Map<String, String>> deleteUser(String email) {
-        return userAccountRepository.findUserEntityByEmailIgnoreCase(email)
+    public ResponseEntity<ResponseUserStatusDto> deleteUser(String email) {
+        return userAccountRepository.findUserEntityByEmailOrFirstAndLastName(email, null)
                 .map(user -> {
                     if (user.getRoles().contains(RoleType.ADMINISTRATOR)) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Impossible to remove ADMINISTRATOR role!");
                     }
 
                     userAccountRepository.delete(user);
-                    return ResponseEntity.ok(Map.of("user", email, "status", "Deleted successfully!"));
+
+                    return ResponseEntity.ok((ResponseUserStatusDto) ResponseUserStatusDto.builder()
+                            .status("Deleted successfully!")
+                            .email(email)
+                            .build());
                 })
                 .orElseThrow(UserNotFoundException::new);
     }
 
-    public ResponseEntity<Map<String, String>> changePassword(String newPassword, String email) {
-        UserEntity user = (UserEntity) loadUserByUsername(email);
+    public ResponseEntity<ResponseUserStatusDto> changePassword(CharSequence newPassword, String email) {
+        UserProfileEntity user = (UserProfileEntity) this.loadUserByUsername(email);
 
         if (passwordEncoder.matches(newPassword, user.getPassword())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Impossible to change the same passwords!");
         }
 
         user.setPassword(passwordEncoder.encode(newPassword));
+
         userAccountRepository.save(user);
-        return ResponseEntity.ok(
-                Map.of(
-                        "email", user.getEmail(),
-                        "status", "The password has been updated successfully"
-                )
-        );
+
+        return ResponseEntity.ok(ResponseUserStatusDto.builder()
+                .status("The password has been updated successfully")
+                .email(user.getEmail())
+                .build());
     }
 
     @Override
     public UserDetails loadUserByUsername(String username) {
+        String[] splitUsername = username.split("\\s");
+        String lastName = splitUsername.length > 1
+                ? splitUsername[1]
+                : EMPTY;
 
-        return username.matches("^[a-zA-Z0-9_.+-]+@acme\\.com$")
-                ? userAccountRepository.findUserEntityByEmailIgnoreCase(username)
-                    .orElseThrow(UserNotFoundException::new)
-                : userAccountRepository.findUserEntityByNameAndLastName(
-                        username.split("\\s")[0],
-                        username.split("\\s").length > 1 ? username.split("\\s")[1] : ""
-                )
+        return userAccountRepository
+                .findUserEntityByEmailOrFirstAndLastName(splitUsername[0], lastName)
                 .orElseThrow(UserNotFoundException::new);
     }
 
-    private UserEntity checkRoleChangeRequest(UserEntity user, RoleChangeRequest request) {
-        if (user.getRoles().isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user must have at least one role!");
-        } else if (request.getRole().equalsIgnoreCase("ADMINISTRATOR")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Can't remove ADMINISTRATOR role!");
-        } else if (
-                user.getRoles()
-                        .stream()
-                        .anyMatch(role -> !role.getRoleType().equals(RoleType.valueOf(request.getRole()).getRoleType()))
-        ) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user cannot combine administrative and business roles!");
-        } else if (request.getOperation() == OperationType.GRANT && user.getRoles().contains(RoleType.valueOf(request.getRole()))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already had this role!");
-        } else if (request.getOperation() == OperationType.REMOVE
-                && user.getRoles().stream().noneMatch(role -> role.toString().equals(request.getRole()))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user does not have a role!");
-        } else return user;
+    private void checkRoleChangeRequest(UserProfileEntity user, RoleChangeRequest request) {
+        this.checkUserRoles(user);
+        this.disallowRoleChangeIfRequestForAdmin(request);
+        this.checkCombinationOfRoles(user, request);
+        this.checkRoleGrant(user, request);
+        this.checkRoleRemove(user, request);
     }
 
+    private void checkUserRoles(UserProfileEntity user) {
+        if (user.getRoles().isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user must have at least one role!");
+    }
+
+    private void disallowRoleChangeIfRequestForAdmin(RoleChangeRequest request) {
+        if (request.getRole().equalsIgnoreCase("ADMINISTRATOR"))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Can't remove ADMINISTRATOR role!");
+    }
+
+    private void checkCombinationOfRoles(UserProfileEntity user, RoleChangeRequest request) {
+        if (user.getRoles()
+                .stream()
+                .anyMatch(role -> !role.getRoleType().equals(RoleType.valueOf(request.getRole()).getRoleType())))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user cannot combine administrative and business roles!");
+    }
+
+    private void checkRoleGrant(UserProfileEntity user, RoleChangeRequest request) {
+        if (request.getOperation() == OperationType.GRANT && containsRole(user, request))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User already had this role!");
+    }
+
+    private void checkRoleRemove(UserProfileEntity user, RoleChangeRequest request) {
+        if (request.getOperation() == OperationType.REMOVE
+                && user.getRoles().stream().noneMatch(role -> role.toString().equals(request.getRole())))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The user does not have a role!");
+    }
+
+    private boolean containsRole(UserProfileEntity user, RoleChangeRequest request) {
+        return user.getRoles().contains(RoleType.valueOf(request.getRole()));
+    }
 }

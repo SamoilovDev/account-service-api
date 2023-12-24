@@ -19,7 +19,7 @@ public class CustomDateValidator implements ConstraintValidator<ValidDate, Date>
         return Optional.ofNullable(date)
                 .map(d -> {
                     try {
-                         return new SimpleDateFormat(DATE_PATTERN).parse(d.toString()).getTime() < 0;
+                         return new SimpleDateFormat(DATE_PATTERN).parse(d.toString()).getTime() > 0;
                     } catch (ParseException ignored) {
                         return Boolean.FALSE;
                     }

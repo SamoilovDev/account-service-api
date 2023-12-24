@@ -1,7 +1,10 @@
 package com.samoilov.dev.account.service.service;
 
+import com.samoilov.dev.account.service.dto.PaymentDto;
+import com.samoilov.dev.account.service.dto.ResponseStatusDto;
 import com.samoilov.dev.account.service.entity.PaymentEntity;
-import com.samoilov.dev.account.service.entity.UserEntity;
+import com.samoilov.dev.account.service.entity.UserProfileEntity;
+import com.samoilov.dev.account.service.mapper.PaymentMapper;
 import com.samoilov.dev.account.service.model.PaymentInfoModel;
 import com.samoilov.dev.account.service.repository.UserPaymentRepository;
 import com.samoilov.dev.account.service.repository.UserAccountRepository;
@@ -24,42 +27,53 @@ public class PaymentService {
 
     private final UserAccountRepository userAccountRepository;
 
-    @Transactional
-    public ResponseEntity<Map<String, String>> addPayments(List<PaymentEntity> paymentEntities) {
-        paymentEntities.forEach(payment -> {
-            userAccountRepository.findUserEntityByEmailIgnoreCase(payment.getUserEmail()).ifPresent(userEntity -> {
-                userEntity.getPayments().add(payment);
-                userAccountRepository.save(userEntity);
-            });
-            userPaymentRepository.save(payment);
-        });
+    private final PaymentMapper paymentMapper;
 
-        return ResponseEntity.ok(Map.of("status", "Added successfully!"));
+    public static final String SUCCESSFUL_ADDITION = "Added successfully!";
+    public static final String SALARY_FORMAT = "%d dollar(s) %d cent(s)";
+    public static final String EMPLOYEE_NOT_FOUND = "Employee doesn't exist!";
+    public static final String UPDATE_SUCCESS = "Updated successfully!";
+
+    @Transactional
+    public ResponseEntity<ResponseStatusDto> addPayments(List<PaymentDto> payments, UserProfileEntity userProfileEntity) {
+        payments.stream()
+                .map(p -> paymentMapper.mapPaymentDtoToEntity(p, userProfileEntity))
+                .forEach(userPaymentRepository::save);
+
+        return ResponseEntity.ok(
+                ResponseStatusDto.builder().status(SUCCESSFUL_ADDITION).build()
+        );
     }
 
     @Transactional
-    public ResponseEntity<Map<String, String>> updatePayment(PaymentEntity payment) {
-        UserEntity user = userAccountRepository.findUserEntityByEmailIgnoreCase(payment.getUserEmail())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Employee doesn't exist!"));
+    public ResponseEntity<ResponseStatusDto> updatePayment(PaymentEntity payment) {
+        userAccountRepository.findUserEntityByEmailOrFirstAndLastName(payment.getUserEmail(), null)
+                .ifPresentOrElse(
+                        user -> {
+                            user.getPayments().add(payment);
+                            userAccountRepository.save(user);
+                        },
+                        () -> {
+                            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, EMPLOYEE_NOT_FOUND);
+                        }
+                );
 
-        user.getPayments().add(payment);
-        userAccountRepository.save(user);
-
-        return ResponseEntity.ok(Map.of("status", "Updated successfully!"));
+        return ResponseEntity.ok(
+                ResponseStatusDto.builder().status(UPDATE_SUCCESS).build()
+        );
     }
 
-    @Transactional
     public ResponseEntity<List<PaymentInfoModel>> findInfoByMail(String email, Date period) {
-        UserEntity user = userAccountRepository.findUserEntityByEmailIgnoreCase(email)
+        UserProfileEntity user = userAccountRepository.findUserEntityByEmailOrFirstAndLastName(email, null)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
         List<PaymentInfoModel> foundedPayments = userPaymentRepository.findByEmailAndOptionalPeriod(email, period)
                 .stream()
-                .map(employee -> new PaymentInfoModel(
-                        user.getName(),
-                        user.getLastName(),
-                        employee.getPeriod(),
-                        this.prepareSalary(employee.getSalary())
-                ))
+                .map(payment -> PaymentInfoModel.builder()
+                        .name(user.getName())
+                        .lastname(user.getLastName())
+                        .period(payment.getPeriod())
+                        .salary(this.prepareSalary(payment.getSalary()))
+                        .build())
                 .toList();
 
         return ResponseEntity.ok(foundedPayments);
@@ -69,8 +83,7 @@ public class PaymentService {
         long dollars = salary.longValue();
         long cents = (long) ((salary % 1) * 100);
 
-        log.info("Prepare salary...");
-        return "%d dollar(s) %d cent(s)".formatted(dollars, cents);
+        return SALARY_FORMAT.formatted(dollars, cents);
     }
 
 }

@@ -24,8 +24,6 @@ public class SecurityConfiguration {
 
     private final ApplicationConfiguration configuration;
 
-
-
     @Bean
     public SecurityFilterChain filterChain(
             HttpSecurity http,

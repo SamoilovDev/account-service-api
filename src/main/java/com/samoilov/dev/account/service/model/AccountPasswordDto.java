@@ -5,10 +5,10 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.Data;
 
 @Data
-public class NewPasswordModel {
+public class AccountPasswordDto {
 
     @ValidPassword
-    @JsonAlias("new_password")
-    private String password;
+    @JsonAlias({"new_password", "password"})
+    private CharSequence password;
 
 }

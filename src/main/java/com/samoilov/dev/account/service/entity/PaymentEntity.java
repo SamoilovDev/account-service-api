@@ -6,6 +6,8 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -13,14 +15,16 @@ import org.springframework.format.annotation.DateTimeFormat;
 
 import java.util.Date;
 
+@Getter
+@Setter
 @Entity
-@Table(name = "employee")
-@Getter @Setter
+@Builder
 @NoArgsConstructor
+@AllArgsConstructor
+@Table(name = "employee")
 public class PaymentEntity {
 
     @Id
-    @JsonIgnore
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
@@ -43,6 +47,6 @@ public class PaymentEntity {
     @JsonIgnore
     @ManyToOne
     @JoinColumn(name = "user_id")
-    private UserEntity user;
+    private UserProfileEntity user;
 
 }
